@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Air-Gapped İHA Acil Durum İstasyonu</title>
+  <style>
+    :root {
+      --bg: #0b0f14;
+      --card: #131a22;
+      --border: #24303e;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --ok: #2ea043;
+      --warn: #d29922;
+      --danger: #f85149;
+      --accent: #388bfd;
+    }
+    * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+    body { margin: 0; background: var(--bg); color: var(--text); padding: 14px; }
+    .container { max-width: 820px; margin: 0 auto; display: grid; gap: 14px; }
+    .card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+    .header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 10px; }
+    .badge { padding: 6px 12px; border-radius: 999px; font-size: 13px; font-weight: 700; }
+    .badge.online { background: rgba(46,160,67,0.2); color: #3fb950; border: 1px solid var(--ok); }
+    .badge.offline { background: rgba(248,81,73,0.2); color: #ff7b72; border: 1px solid var(--danger); }
+    .row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    input, button { padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border); font-size: 14px; }
+    input { background: #0d1117; color: var(--text); flex: 1; min-width: 200px; }
+    button { background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; border: none; }
+    button.secondary { background: #21262d; border: 1px solid var(--border); }
+    button.danger { background: rgba(248,81,73,0.2); color: #ff7b72; border: 1px solid var(--danger); }
+    button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .quick-btn { background: #1c2430; border: 1px solid #303d4e; font-size: 13px; padding: 7px 10px; }
+    .answer-box { white-space: pre-wrap; line-height: 1.55; background: #0d1117; padding: 12px; border-radius: 8px; border: 1px solid var(--border); margin-top: 10px; }
+    .meta { font-size: 12px; color: var(--muted); margin-top: 8px; }
+    .qr-box { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+    .qr-box img { width: 120px; height: 120px; border-radius: 8px; background: #fff; padding: 4px; }
+    table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 8px; }
+    th, td { text-align: left; padding: 6px; border-bottom: 1px solid var(--border); }
+    th { color: var(--muted); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <!-- Üst Durum Çubuğu: Heartbeat (Özellik 2) -->
+  <div class="card header">
+    <div>
+      <strong style="font-size:17px;">🛡️ AIR-GAPPED İHA BAKIM & ACİL DURUM İSTASYONU</strong>
+      <div class="meta" id="subStatus">Heartbeat protokolü ile yerel sunucu izleniyor...</div>
+    </div>
+    <span id="hbBadge" class="badge online">● HEARTBEAT: ÇEVRİMİÇİ</span>
+  </div>
+
+  <!-- Sorgu ve HMAC İmzalama Alanı (Özellik 1 & 5) -->
+  <div class="card">
+    <div style="font-weight:700; margin-bottom:6px;">1. Teknik Bakım & Arıza Sorgusu (HMAC-SHA256 Korumalı)</div>
+    <div class="row">
+      <input id="operatorId" value="OP-TB2-01" style="max-width:140px;" placeholder="Operatör ID" />
+      <input id="queryInput" placeholder="Örn: E-104 motor hararet arızasında ne yapmalıyım?" />
+      <button onclick="sendQuery(false)">İmzala ve Sorgula</button>
+      <button class="danger" onclick="sendQuery(true)" title="Geçersiz HMAC imzası göndererek güvenlik duvarını test eder">Sahte İmza Testi</button>
+    </div>
+
+    <div class="row">
+      <button class="quick-btn" onclick="quickAsk('E-104 motor hararet ve yağ basıncı arızasında acil müdahale adımları nelerdir?')">🔥 E-104 Hararet</button>
+      <button class="quick-btn" onclick="quickAsk('E-208 yakıt akış düzensizliği durumunda ne yapılmalı?')">⛽ E-208 Yakıt</button>
+      <button class="quick-btn" onclick="quickAsk('E-312 alternatör şarj kaybında kalan uçuş süresi ve prosedür nedir?')">🔋 E-312 Batarya</button>
+      <button class="quick-btn" onclick="quickAsk('E-401 haberleşme kopması ve geofence ihlalinde sistem ne yapar?')">📡 E-401 Geofence</button>
+    </div>
+
+    <div class="row" style="align-items:center;">
+      <label style="font-size:13px; display:flex; align-items:center; gap:6px; cursor:pointer;">
+        <input type="checkbox" id="autoTts" checked style="min-width:auto;" />
+        🔊 Otomatik Sesli İkaz (TTS)
+      </label>
+      <button class="secondary" onclick="speakLastAnswer()">Tekrar Sesli Oku</button>
+      <button class="secondary" onclick="window.speechSynthesis.cancel()">Sesi Durdur</button>
+    </div>
+
+    <div id="answerBox" class="answer-box">Sistem hazır. Bir arıza kodu seçin veya sorunuzu yazın.</div>
+    <div id="metaBox" class="meta"></div>
+  </div>
+
+  <!-- QR Mobil Erişim ve Çevrimdışı Önbellek (Özellik 4) -->
+  <div class="card qr-box">
+    <img src="/api/qr" alt="Mobil Erişim QR Kodu" />
+    <div style="flex:1;">
+      <div style="font-weight:700;">2. QR Kod ile Mobil Yedek İstasyon & Çevrimdışı Önbellek</div>
+      <div class="meta" id="lanUrlText">Yerel ağ adresi yükleniyor...</div>
+      <div class="meta" id="cacheStatus" style="color:#3fb950; margin-top:6px;">Çevrimdışı acil durum paketi kontrol ediliyor...</div>
+    </div>
+  </div>
+
+  <!-- Kara Kutu Denetim Günlüğü (Özellik 3) -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <strong>3. Değiştirilemez Kara Kutu Günlüğü (SHA-256 Hash Zinciri)</strong>
+      <button class="secondary" onclick="loadLogs()">Yenile</button>
+    </div>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Operatör</th>
+          <th>Durum</th>
+          <th>Sorgu</th>
+          <th>Önceki Hash</th>
+          <th>Kayıt Hash</th>
+        </tr>
+      </thead>
+      <tbody id="logsBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+const SHARED_SECRET = "baykar-saha-acil-durum-gizli-anahtar-2026";
+let isOnline = true;
+let lastSpokenText = "";
+
+// Saf JavaScript SHA-256 & HMAC-SHA256 (HTTP yerel ağ IP'lerinde de sorunsuz çalışır)
+function sha256Bytes(msgBytes) {
+  const K = [
+    0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+    0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+    0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+    0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+    0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+    0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+    0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+    0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2
+  ];
+  let H = [0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const bitLen = msgBytes.length * 8;
+  const padLen = ((msgBytes.length + 8) >> 6 << 6) + 64;
+  const buf = new Uint8Array(padLen);
+  buf.set(msgBytes);
+  buf[msgBytes.length] = 0x80;
+  const view = new DataView(buf.buffer);
+  view.setUint32(padLen - 8, Math.floor(bitLen / 0x100000000), false);
+  view.setUint32(padLen - 4, bitLen >>> 0, false);
+
+  const rotr = (x, n) => (x >>> n) | (x << (32 - n));
+  const w = new Uint32Array(64);
+
+  for (let offset = 0; offset < padLen; offset += 64) {
+    for (let i = 0; i < 16; i++) w[i] = view.getUint32(offset + i * 4, false);
+    for (let i = 16; i < 64; i++) {
+      const s0 = rotr(w[i-15], 7) ^ rotr(w[i-15], 18) ^ (w[i-15] >>> 3);
+      const s1 = rotr(w[i-2], 17) ^ rotr(w[i-2], 19) ^ (w[i-2] >>> 10);
+      w[i] = (w[i-16] + s0 + w[i-7] + s1) >>> 0;
+    }
+    let [a,b,c,d,e,f,g,h] = H;
+    for (let i = 0; i < 64; i++) {
+      const S1 = rotr(e, 6) ^ rotr(e, 11) ^ rotr(e, 25);
+      const ch = (e & f) ^ (~e & g);
+      const temp1 = (h + S1 + ch + K[i] + w[i]) >>> 0;
+      const S0 = rotr(a, 2) ^ rotr(a, 13) ^ rotr(a, 22);
+      const maj = (a & b) ^ (a & c) ^ (b & c);
+      const temp2 = (S0 + maj) >>> 0;
+      h = g; g = f; f = e; e = (d + temp1) >>> 0;
+      d = c; c = b; b = a; a = (temp1 + temp2) >>> 0;
+    }
+    H = [
+      (H[0]+a)>>>0, (H[1]+b)>>>0, (H[2]+c)>>>0, (H[3]+d)>>>0,
+      (H[4]+e)>>>0, (H[5]+f)>>>0, (H[6]+g)>>>0, (H[7]+h)>>>0
+    ];
+  }
+  const out = new Uint8Array(32);
+  const outView = new DataView(out.buffer);
+  H.forEach((val, idx) => outView.setUint32(idx * 4, val, false));
+  return out;
+}
+
+function hmacSha256Hex(secret, message) {
+  const enc = new TextEncoder();
+  let key = enc.encode(secret);
+  const msg = enc.encode(message);
+  if (key.length > 64) key = sha256Bytes(key);
+  const paddedKey = new Uint8Array(64);
+  paddedKey.set(key);
+  const ipad = new Uint8Array(64);
+  const opad = new Uint8Array(64);
+  for (let i = 0; i < 64; i++) {
+    ipad[i] = paddedKey[i] ^ 0x36;
+    opad[i] = paddedKey[i] ^ 0x5c;
+  }
+  const innerInput = new Uint8Array(64 + msg.length);
+  innerInput.set(ipad);
+  innerInput.set(msg, 64);
+  const innerHash = sha256Bytes(innerInput);
+
+  const outerInput = new Uint8Array(64 + 32);
+  outerInput.set(opad);
+  outerInput.set(innerHash, 64);
+  const finalBytes = sha256Bytes(outerInput);
+  return Array.from(finalBytes).map(b => b.toString(16).padStart(2, "0")).join("");
+}
+
+// [Özellik 5] Sesli İkaz Sistemi (TTS)
+function speakText(text) {
+  lastSpokenText = text;
+  if (!document.getElementById("autoTts").checked) return;
+  if (!("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = "tr-TR";
+  utter.rate = 1.05;
+  window.speechSynthesis.speak(utter);
+}
+
+function speakLastAnswer() {
+  if (!lastSpokenText || !("speechSynthesis" in window)) return;
+  window.speechSynthesis.cancel();
+  const utter = new SpeechSynthesisUtterance(lastSpokenText);
+  utter.lang = "tr-TR";
+  window.speechSynthesis.speak(utter);
+}
+
+// [Özellik 4] Çevrimdışı Acil Durum Önbelleğini İndir ve Sakla
+async function syncOfflineCache() {
+  try {
+    const res = await fetch("/api/offline-pack");
+    if (res.ok) {
+      const data = await res.json();
+      localStorage.setItem("tb2_offline_pack", JSON.stringify(data));
+      document.getElementById("cacheStatus").textContent =
+        `✓ Çevrimdışı Önbellek Hazır (${data.procedures.length} kritik acil durum prosedürü cihaz hafızasında)`;
+    }
+  } catch (e) {
+    const cached = localStorage.getItem("tb2_offline_pack");
+    if (cached) {
+      document.getElementById("cacheStatus").textContent =
+        "⚠ Sunucu bağlantısı yok — Yerel tarayıcı önbelleği aktif.";
+    }
+  }
+}
+
+function searchOfflineCache(query) {
+  const raw = localStorage.getItem("tb2_offline_pack");
+  if (!raw) return "Çevrimdışı önbellek henüz senkronize edilmemiş.";
+  const pack = JSON.parse(raw);
+  const q = query.toUpperCase();
+  const match = pack.procedures.find(p => q.includes(p.code) || q.includes(p.title.toUpperCase().split(" ")[0]));
+  if (match) {
+    return `[ÇEVRİMDIŞI ÖNBELLEK MODU - ${match.code}]\n${match.title}\n${match.steps}`;
+  }
+  return pack.procedures.map(p => `• ${p.code} (${p.title}): ${p.steps}`).join("\n\n");
+}
+
+// [Özellik 2] Heartbeat Kontrolü
+async function checkHeartbeat() {
+  const badge = document.getElementById("hbBadge");
+  const sub = document.getElementById("subStatus");
+  try {
+    const res = await fetch("/api/health");
+    if (!res.ok) throw new Error("HTTP error");
+    const data = await res.json();
+    isOnline = true;
+    badge.className = "badge online";
+    badge.textContent = "● HEARTBEAT: ÇEVRİMİÇİ";
+    sub.textContent = `Sunucu Aktif | Ollama LLM: ${data.ollama_ready ? "HAZIR" : "BEKLENİYOR"} | Yerel Ağ: ${data.lan_url}`;
+    document.getElementById("lanUrlText").textContent =
+      `Telefon/tabletten bağlanmak için QR okutun: ${data.lan_url}`;
+  } catch (e) {
+    isOnline = false;
+    badge.className = "badge offline";
+    badge.textContent = "▲ HEARTBEAT KOPTU: YEDEK MOD";
+    sub.textContent = "Sunucuya ulaşılamıyor! Sistem otomatik olarak Çevrimdışı Önbellek moduna geçti.";
+  }
+}
+
+function quickAsk(text) {
+  document.getElementById("queryInput").value = text;
+  sendQuery(false);
+}
+
+async function sendQuery(tamperSignature) {
+  const operatorId = document.getElementById("operatorId").value.trim() || "OP-UNKNOWN";
+  const query = document.getElementById("queryInput").value.trim();
+  if (!query) return;
+
+  const answerBox = document.getElementById("answerBox");
+  const metaBox = document.getElementById("metaBox");
+
+  if (!isOnline) {
+    const offlineAns = searchOfflineCache(query);
+    answerBox.textContent = offlineAns;
+    metaBox.textContent = "Kaynak: Yerel Cihaz Çevrimdışı Önbelleği (Failover Aktif)";
+    speakText(offlineAns);
+    return;
+  }
+
+  answerBox.textContent = "HMAC imzalanıyor ve yerel RAG motorundan yanıt üretiliyor...";
+  metaBox.textContent = "";
+
+  const timestamp = Math.floor(Date.now() / 1000).toString();
+  const signature = tamperSignature
+    ? "0000sahteimza9999"
+    : hmacSha256Hex(SHARED_SECRET, `${operatorId}:${timestamp}:${query}`);
+
+  try {
+    const res = await fetch("/api/query", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ operator_id: operatorId, timestamp, query, signature }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      answerBox.textContent = `⛔ GÜVENLİK REDDİ (HTTP ${res.status}): ${data.detail}`;
+      metaBox.textContent = "Bu yetkisiz erişim denemesi Kara Kutu günlüğüne kaydedildi.";
+      speakText("Güvenlik uyarısı. Yetkisiz komut reddedildi.");
+      loadLogs();
+      return;
+    }
+
+    answerBox.textContent = data.answer;
+    metaBox.textContent = `Kaynak: ${data.sources.join(", ")} | Kara Kutu Kayıt #${data.blackbox.id} (Hash: ${data.blackbox.record_hash})`;
+    speakText(data.answer);
+    loadLogs();
+  } catch (err) {
+    const fallback = searchOfflineCache(query);
+    answerBox.textContent = fallback;
+    metaBox.textContent = "Bağlantı kesildiği için Çevrimdışı Önbellek devreye girdi.";
+    speakText(fallback);
+  }
+}
+
+async function loadLogs() {
+  try {
+    const res = await fetch("/api/logs");
+    if (!res.ok) return;
+    const data = await res.json();
+    const tbody = document.getElementById("logsBody");
+    tbody.innerHTML = data.logs.map(l => `
+      <tr>
+        <td>${l.id}</td>
+        <td>${l.operator_id}</td>
+        <td style="color:${l.action_type === 'SECURITY_REJECTED' ? '#ff7b72' : '#3fb950'}">${l.action_type}</td>
+        <td>${l.query_text.slice(0, 36)}...</td>
+        <td><code>${l.prev_hash}</code></td>
+        <td><code>${l.record_hash}</code></td>
+      </tr>
+    `).join("");
+  } catch (e) {}
+}
+
+checkHeartbeat();
+syncOfflineCache();
+loadLogs();
+setInterval(checkHeartbeat, 3000);
+</script>
+</body>
+</html>

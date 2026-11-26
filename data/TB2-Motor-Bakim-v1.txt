@@ -1,0 +1,36 @@
+BELGE KODU: TB2-MOTOR-BAKIM-V1
+SİSTEM: İHA İTKİ VE MOTOR ACİL DURUM BAKIM PROSEDÜRÜ
+
+---
+BÖLÜM 1: MOTOR HARARET VE YAĞ BASINCI ARIZASI (KOD: E-104)
+Belirti: Silindir kapak sıcaklığı 135°C üzerine çıktığında veya yağ basıncı 1.8 bar altına düştüğünde yer kontrol istasyonunda E-104 ikazı yanar.
+Acil Müdahale Adımları:
+1. Gaz kolunu (throttle) derhal %45 seyir seviyesine çekin ve tırmanışı durdurun.
+2. Radyatör soğutma kapakçıklarını %100 tam açık konuma getirin.
+3. Sıcaklık 30 saniye içinde 120°C altına düşmezse en yakın yedek iniş pistine acil alçalma başlatın.
+4. İniş sonrası motor tamamen soğumadan yağ kapağını açmayın; manyetik tapa üzerinde metal talaşı kontrolü yapın.
+
+---
+BÖLÜM 2: YAKIT AKIŞ DÜZENSİZLİĞİ VE ENJEKTÖR TIKANIKLIĞI (KOD: E-208)
+Belirti: Yakıt basınç sensöründe ani dalgalanma ve devir (RPM) kaybı yaşanması.
+Acil Müdahale Adımları:
+1. Yedek elektrikli yakıt pompasını (AUX FUEL PUMP) devreye alın.
+2. Yakıt filtre fark basıncını telemetri ekranından kontrol edin; 0.6 bar üzerindeyse filtre tıkanmıştır.
+3. Motor devrini 4800 RPM sabit değerinde tutarak ani gaz değişimlerinden kaçının.
+4. Operasyon sonrası yakıt hattı su ayırıcı valfini tahliye edin ve ana yakıt filtresini yenisiyle değiştirin.
+
+---
+BÖLÜM 3: ALTERNATÖR ŞARJ KAYBI VE BATARYA YEDEK MODU (KOD: E-312)
+Belirti: Ana bara voltajının 24.0V altına düşmesi ve alternatör ikaz lambasının yanması.
+Acil Müdahale Adımları:
+1. Görev yükü (kamera/gimbal ve ikincil veri linki) güç şalterlerini kapatarak enerji tasarrufu moduna geçin.
+2. Yedek LiPo batarya grubunun devreye girdiğini ve voltajın 25.2V seviyesinde sabitlendiğini doğrulayın.
+3. Mevcut batarya kapasitesi ile kalan güvenli uçuş süresi maksimum 18 dakikadır; derhal üsse dönüş (RTL) komutunu verin.
+
+---
+BÖLÜM 4: HABERLEŞME KOPMASI VE GEOFENCE SINIR İHLALİ (KOD: E-401)
+Belirti: Yer kontrol istasyonu ile veri bağı 10 saniyeden uzun süre kesildiğinde veya tanımlı uçuş sahası sınırı aşıldığında.
+Acil Müdahale Adımları:
+1. Otopilot otomatik olarak 3000 feet güvenli irtifaya yükselir ve tanımlı eve dönüş (Home Point) koordinatına yönelir.
+2. Operatör mobil yedek istasyondan QR bağlantı ile ikincil yerel sunucu üzerinden son telemetri ve kara kutu kayıtlarını doğrular.
+3. Veri bağı 60 saniye içinde geri gelmezse sistem belirlenen acil paraşüt/iniş bölgesine otonom iniş gerçekleştirir.
